@@ -2,12 +2,12 @@ from django.conf import settings
 from django.db import models
 from django.core.validators import FileExtensionValidator
 from django.utils import timezone
-from django.contrib.postgres.fields import ArrayField
+# from django.contrib.postgres.fields import ArrayField
 
 class Job(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
-    keywords = ArrayField(models.CharField(max_length=64), blank=True, default=list)
+    keywords = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
@@ -27,7 +27,7 @@ class Resume(models.Model):
     name = models.CharField(max_length=255, blank=True, default="")
     email = models.CharField(max_length=255, blank=True, default="")
     phone = models.CharField(max_length=64, blank=True, default="")
-    skills = ArrayField(models.CharField(max_length=64), blank=True, default=list)
+    keywords = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
