@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Automated Resume Parser</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+  <!-- Navbar -->
+  <header class="bg-white shadow">
+    <div class="max-w-6xl mx-auto flex justify-between items-center px-4 py-3">
+      <h1 class="text-xl font-bold">Automated Resume Parser</h1>
+      <button id="authBtn"
+        class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+        Authenticate
+      </button>
+    </div>
+  </header>
+
+  <!-- Main content -->
+  <main class="max-w-6xl mx-auto p-6">
+    <div class="grid md:grid-cols-2 gap-6">
+      <!-- Upload CV -->
+      <div class="bg-white p-6 rounded-xl shadow">
+        <h2 class="text-lg font-semibold mb-4">Upload Resume</h2>
+        <input id="resumeFile" type="file" accept=".pdf,.docx,.txt"
+               class="block w-full text-sm text-gray-700 border rounded mb-4">
+        <button onclick="uploadResume()"
+          class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+          Upload
+        </button>
+        <p id="resumeStatus" class="mt-2 text-sm"></p>
+        <div id="resumesList" class="mt-4 text-xs font-mono text-gray-600"></div>
+      </div>
+
+      <!-- Job description -->
+      <div class="bg-white p-6 rounded-xl shadow">
+        <h2 class="text-lg font-semibold mb-4">Job Description</h2>
+        <input id="jobTitle" type="text"
+               placeholder="Job title"
+               class="w-full mb-3 p-2 border rounded">
+        <textarea id="jobDesc"
+                  placeholder="Paste the full job description here..."
+                  class="w-full p-2 border rounded h-40"></textarea>
+        <div class="flex gap-2 mt-3">
+          <button onclick="extractKeywords()"
+            class="px-3 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+            Extract Keywords
+          </button>
+          <input id="jobKeywords" type="text"
+                 placeholder="keywords,comma,separated"
+                 class="flex-1 p-2 border rounded">
+          <button onclick="createJob()"
+            class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Create Job
+          </button>
+        </div>
+        <p id="jobStatus" class="mt-2 text-sm"></p>
+        <div id="jobsList" class="mt-4 text-xs font-mono text-gray-600"></div>
+      </div>
+    </div>
+
+    <!-- Match result -->
+    <div class="mt-8 bg-white p-6 rounded-xl shadow">
+      <h2 class="text-lg font-semibold mb-4">Match Resume & Job</h2>
+      <div class="flex gap-3 mb-3">
+        <input id="matchResumeId" type="text" placeholder="Resume ID"
+               class="w-1/2 p-2 border rounded">
+        <input id="matchJobId" type="text" placeholder="Job ID"
+               class="w-1/2 p-2 border rounded">
+        <button onclick="match()"
+          class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+          Submit
+        </button>
+      </div>
+      <p id="matchStatus" class="text-sm"></p>
+      <pre id="matchResult"
+           class="mt-4 bg-gray-100 p-4 rounded text-xs font-mono overflow-auto"></pre>
+    </div>
+  </main>
+
+  <!-- Login modal -->
+  <div id="loginModal"
+       class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center">
+    <div class="bg-white rounded-lg shadow-xl w-80 p-6 animate-scale">
+      <h2 class="text-lg font-semibold mb-4">Authenticate</h2>
+      <input id="username" type="text" placeholder="Username"
+             class="w-full p-2 mb-3 border rounded">
+      <input id="password" type="password" placeholder="Password"
+             class="w-full p-2 mb-4 border rounded">
+      <div class="flex justify-end gap-2">
+        <button onclick="closeModal()"
+          class="px-3 py-2 border rounded">Cancel</button>
+        <button onclick="login()"
+          class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+          Login
+        </button>
+      </div>
+      <p id="tokStatus" class="mt-2 text-sm"></p>
+    </div>
+  </div>
+
+  <style>
+    @keyframes scale { from { transform:scale(0.9); opacity:0 } to { transform:scale(1); opacity:1 } }
+    .animate-scale { animation: scale .25s ease-out }
+  </style>
+
+<script>
+  let token = null;
+
+  function openModal(){ document.getElementById('loginModal').classList.remove('hidden'); }
+  function closeModal(){ document.getElementById('loginModal').classList.add('hidden'); }
+  document.getElementById('authBtn').addEventListener('click', openModal);
+
+  function authHeader(){ return token ? {Authorization: 'Bearer ' + token} : {}; }
+  function show(id, text, cls=''){ const el=document.getElementById(id); el.textContent=text; el.className=cls; }
+
+  async function login(){
+    const body = {username:username.value.trim(), password:password.value};
+    const r = await fetch('/api/auth/token/', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    const j = await r.json();
+    if(r.ok){ token=j.access; show('tokStatus','Authenticated','text-green-600'); closeModal(); listJobs(); listResumes(); }
+    else{ show('tokStatus', j.detail || 'Login failed', 'text-red-600'); }
+  }
+
+  async function extractKeywords(){
+    const r = await fetch('/api/jobs/keywords/', {
+      method:'POST', headers:{'Content-Type':'application/json',...authHeader()},
+      body:JSON.stringify({description: jobDesc.value})
+    });
+    const j = await r.json();
+    if(r.ok) jobKeywords.value = j.keywords.join(',');
+    else alert('Keyword extract failed');
+  }
+
+  async function createJob(){
+    const r = await fetch('/api/jobs/', {
+      method:'POST', headers:{'Content-Type':'application/json',...authHeader()},
+      body:JSON.stringify({title:jobTitle.value, description:jobDesc.value,
+                           keywords: jobKeywords.value.split(',').map(x=>x.trim()).filter(Boolean)})
+    });
+    const j = await r.json();
+    if(r.ok){ show('jobStatus','Job created','text-green-600'); listJobs(); }
+    else show('jobStatus',j.detail || 'Error','text-red-600');
+  }
+
+  async function listJobs(){
+    const r = await fetch('/api/jobs/', {headers:{...authHeader()}});
+    if(r.ok){ const j=await r.json(); jobsList.textContent=(Array.isArray(j)?j:j.results||[]).map(x=>`id=${x.id} • ${x.title}`).join('\\n')||'(none)'; }
+  }
+
+  async function uploadResume(){
+    const f=resumeFile.files[0]; if(!f) return alert('Choose a file');
+    const fd=new FormData(); fd.append('file',f);
+    const r=await fetch('/api/resumes/', {method:'POST', headers:{...authHeader()}, body:fd});
+    const j=await r.json();
+    if(r.ok){ show('resumeStatus','Uploaded id='+j.id,'text-green-600'); listResumes(); }
+    else show('resumeStatus',j.detail||'Error','text-red-600');
+  }
+
+  async function listResumes(){
+    const r=await fetch('/api/resumes/',{headers:{...authHeader()}});
+    if(r.ok){ const j=await r.json(); const arr=Array.isArray(j)?j:j.results||[];
+      resumesList.textContent = arr.map(x=>`id=${x.id} • ${x.email||'-'}`).join('\\n') || '(none)';
+      if(arr[0]) matchResumeId.value=arr[0].id; }
+  }
+
+  async function match(){
+    const r = await fetch('/api/match/', {
+      method:'POST', headers:{'Content-Type':'application/json',...authHeader()},
+      body:JSON.stringify({resume_id:+matchResumeId.value, job_id:+matchJobId.value})
+    });
+    const j = await r.json();
+    if(r.ok){
+      matchStatus.textContent=`Score: ${j.score}%`;
+      matchResult.textContent = JSON.stringify(j, null, 2);
+    } else matchStatus.textContent=j.detail||'Error';
+  }
+</script>
+
+</body>
+</html>

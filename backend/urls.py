@@ -27,6 +27,6 @@ urlpatterns = [
     path("api/", include("resumes.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
-    path("playground/", TemplateView.as_view(template_name="playground.html")),
+    path("index/", TemplateView.as_view(template_name="index.html")),
 ]
 
